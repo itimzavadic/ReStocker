@@ -1,0 +1,16 @@
+{
+  "name": "restocker-frontend",
+  "version": "1.0.0",
+  "description": "ReStocker Telegram Mini App Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  },
+  "dependencies": {}
+}
+
