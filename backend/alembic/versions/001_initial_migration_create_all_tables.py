@@ -7,7 +7,6 @@ Create Date: 2024-01-15 12:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '001'
@@ -17,21 +16,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Создание ENUM типов (сначала создаем типы, потом используем их в таблицах)
-    op.execute("CREATE TYPE userrole AS ENUM ('менеджер', 'владелец')")
-    op.execute("CREATE TYPE subscriptiontype AS ENUM ('бесплатная', 'премиум', 'пробная')")
-    op.execute("CREATE TYPE triggertype AS ENUM ('товар', 'категория', 'ключевое_слово')")
-    op.execute("CREATE TYPE actiontype AS ENUM ('списание', 'добавление')")
-    op.execute("CREATE TYPE sourcetype AS ENUM ('ручное', 'CRM', 'кнопка')")
-    
+    # Используем кросс-СУБД Enum: sa.Enum создаст CHECK в SQLite и native ENUM в PostgreSQL
     # Создание таблицы users
     op.create_table(
         'users',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
         sa.Column('email', sa.String(), nullable=True),
-        sa.Column('role', postgresql.ENUM('менеджер', 'владелец', name='userrole'), nullable=True),
-        sa.Column('subscription', postgresql.ENUM('бесплатная', 'премиум', 'пробная', name='subscriptiontype'), nullable=True),
+        sa.Column('role', sa.Enum('менеджер', 'владелец', name='userrole'), nullable=True),
+        sa.Column('subscription', sa.Enum('бесплатная', 'премиум', 'пробная', name='subscriptiontype'), nullable=True),
         sa.Column('telegram_id', sa.BigInteger(), nullable=False),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint('id')
@@ -62,7 +55,7 @@ def upgrade() -> None:
     op.create_table(
         'rules',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('trigger_type', postgresql.ENUM('товар', 'категория', 'ключевое_слово', name='triggertype'), nullable=False),
+        sa.Column('trigger_type', sa.Enum('товар', 'категория', 'ключевое_слово', name='triggertype'), nullable=False),
         sa.Column('trigger_value', sa.String(), nullable=False),
         sa.Column('owner_id', sa.Integer(), nullable=False),
         sa.Column('created_at', sa.DateTime(), nullable=True),
@@ -114,10 +107,10 @@ def upgrade() -> None:
         'sales_logs',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('datetime', sa.DateTime(), nullable=True),
-        sa.Column('action', postgresql.ENUM('списание', 'добавление', name='actiontype'), nullable=False),
+        sa.Column('action', sa.Enum('списание', 'добавление', name='actiontype'), nullable=False),
         sa.Column('product_id', sa.Integer(), nullable=False),
         sa.Column('quantity', sa.Float(), nullable=False),
-        sa.Column('source', postgresql.ENUM('ручное', 'CRM', 'кнопка', name='sourcetype'), nullable=False),
+        sa.Column('source', sa.Enum('ручное', 'CRM', 'кнопка', name='sourcetype'), nullable=False),
         sa.Column('source_details', sa.String(), nullable=True),
         sa.Column('user_id', sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(['product_id'], ['products.id'], ),
@@ -156,10 +149,5 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_table('users')
     
-    # Удаление ENUM типов (после удаления всех таблиц, которые их используют)
-    op.execute("DROP TYPE IF EXISTS sourcetype CASCADE")
-    op.execute("DROP TYPE IF EXISTS actiontype CASCADE")
-    op.execute("DROP TYPE IF EXISTS triggertype CASCADE")
-    op.execute("DROP TYPE IF EXISTS subscriptiontype CASCADE")
-    op.execute("DROP TYPE IF EXISTS userrole CASCADE")
+    # Для SQLite/кросс-СУБД дополнительных действий по удалению типов не требуется
 

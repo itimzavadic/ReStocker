@@ -35,9 +35,17 @@ async function loadProducts() {
     try {
         products = await apiClient.getProducts();
         console.log('Products loaded:', products);
+        // Убираем сообщение об ошибке, если оно было
+        const errorDiv = document.getElementById('error-message');
+        if (errorDiv) {
+            errorDiv.remove();
+        }
     } catch (error) {
         console.error('Failed to load products:', error);
-        showError('Не удалось загрузить товары. Проверьте подключение к серверу.');
+        const errorMsg = `Не удалось загрузить товары: ${error.message || 'Неизвестная ошибка'}`;
+        showError(errorMsg);
+        // Отображаем ошибку на экране
+        showErrorOnScreen(errorMsg);
         products = [];
     }
 }
@@ -46,14 +54,25 @@ async function loadProducts() {
 function render() {
     const app = document.getElementById('app');
     
+    // Добавляем отладочную информацию
+    const debugInfo = `
+        <div style="padding: 10px; background: #f0f0f0; font-size: 12px; margin-bottom: 10px;">
+            <strong>Отладка:</strong><br>
+            Hostname: ${window.location.hostname}<br>
+            API URL: ${apiClient.baseURL || '(relative)'}<br>
+            Telegram ID: ${apiClient.getTelegramId()}<br>
+            Telegram WebApp: ${window.Telegram?.WebApp ? 'Да' : 'Нет'}
+        </div>
+    `;
+    
     if (currentState === 'form' || currentState === 'edit') {
         const product = currentState === 'edit' && currentEditId 
             ? products.find(p => p.id === currentEditId) 
             : null;
-        app.innerHTML = renderProductForm(product);
+        app.innerHTML = debugInfo + renderProductForm(product);
         setupFormHandlers();
     } else {
-        app.innerHTML = renderProductList(products, addProduct, editProduct, deleteProduct);
+        app.innerHTML = debugInfo + renderProductList(products, addProduct, editProduct, deleteProduct);
     }
 }
 
@@ -135,6 +154,17 @@ function showError(message) {
         tg.showAlert(message);
     } else {
         alert('Ошибка: ' + message);
+    }
+}
+
+function showErrorOnScreen(message) {
+    const app = document.getElementById('app');
+    if (app && !document.getElementById('error-message')) {
+        const errorDiv = document.createElement('div');
+        errorDiv.id = 'error-message';
+        errorDiv.style.cssText = 'padding: 15px; background: #ffebee; color: #c62828; border-radius: 8px; margin: 10px;';
+        errorDiv.innerHTML = `<strong>Ошибка:</strong> ${message}`;
+        app.insertBefore(errorDiv, app.firstChild);
     }
 }
 

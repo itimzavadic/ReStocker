@@ -3,17 +3,32 @@
  */
 // В режиме разработки используем относительные пути (через Vite proxy)
 // В продакшене можно указать VITE_API_URL в .env
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+// Если мы в Telegram Mini App через туннель, используем абсолютный URL backend
+let API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+// Если находимся на домене localhost.run или в Telegram WebApp - используем туннель backend
+if (!API_BASE_URL && (window.location.hostname.includes('lhr.life') || window.Telegram?.WebApp)) {
+    // URL backend туннеля (обновите при изменении туннеля)
+    API_BASE_URL = 'https://fcc85d962b95bc.lhr.life';
+    console.log('Detected tunnel domain or Telegram WebApp, using backend tunnel:', API_BASE_URL);
+} else {
+    console.log('Using relative paths or VITE_API_URL:', API_BASE_URL || '(relative via Vite proxy)');
+}
 
 class ApiClient {
     constructor(baseURL) {
         this.baseURL = baseURL;
     }
-
+    
+    // Экспортируем метод для получения telegram_id для отладки
+    getTelegramId() {
+        return this._getTelegramId();
+    }
+    
     /**
      * Получить telegram_id из Telegram WebApp или из localStorage (для разработки)
      */
-    getTelegramId() {
+    _getTelegramId() {
         // Пробуем получить из Telegram WebApp
         if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
             return window.Telegram.WebApp.initDataUnsafe.user.id;
@@ -31,7 +46,15 @@ class ApiClient {
 
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
-        const telegramId = this.getTelegramId();
+        const telegramId = this._getTelegramId();
+        
+        console.log('API Request:', {
+            url,
+            endpoint,
+            baseURL: this.baseURL,
+            telegramId,
+            method: options.method || 'GET'
+        });
         
         const config = {
             ...options,
@@ -50,11 +73,21 @@ class ApiClient {
         }
 
         try {
+            console.log('Fetching:', url, config);
             const response = await fetch(url, config);
             
+            console.log('Response status:', response.status, response.statusText);
+            
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                throw new Error(errorData.detail || `API error: ${response.status}`);
+                const errorText = await response.text();
+                let errorData;
+                try {
+                    errorData = JSON.parse(errorText);
+                } catch {
+                    errorData = { detail: errorText || `HTTP ${response.status}` };
+                }
+                console.error('API Error:', errorData, 'Response text:', errorText);
+                throw new Error(errorData.detail || errorData.message || `API error: ${response.status}`);
             }
 
             // Для DELETE запросов может не быть body
@@ -62,9 +95,17 @@ class ApiClient {
                 return null;
             }
 
-            return await response.json();
+            const data = await response.json();
+            console.log('API Success:', data);
+            return data;
         } catch (error) {
             console.error('API request failed:', error);
+            console.error('Error details:', {
+                message: error.message,
+                url,
+                baseURL: this.baseURL,
+                stack: error.stack
+            });
             throw error;
         }
     }
