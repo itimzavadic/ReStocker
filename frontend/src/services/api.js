@@ -6,13 +6,12 @@
 // Если мы в Telegram Mini App через туннель, используем абсолютный URL backend
 let API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
-// Если находимся на домене localhost.run или в Telegram WebApp - используем туннель backend
+// Если VITE_API_URL не установлен и мы в Telegram WebApp или на домене туннеля - используем туннель backend
+// Для продакшена (Railway/Vercel) VITE_API_URL должен быть установлен через переменные окружения
 if (!API_BASE_URL && (window.location.hostname.includes('lhr.life') || window.Telegram?.WebApp)) {
-    // URL backend туннеля (обновите при изменении туннеля)
-    API_BASE_URL = 'https://fcc85d962b95bc.lhr.life';
-    console.log('Detected tunnel domain or Telegram WebApp, using backend tunnel:', API_BASE_URL);
-} else {
-    console.log('Using relative paths or VITE_API_URL:', API_BASE_URL || '(relative via Vite proxy)');
+    // URL backend туннеля для локальной разработки (обновите при изменении туннеля)
+    // ВАЖНО: Обновите этот URL после каждого перезапуска backend туннеля!
+    API_BASE_URL = 'https://8ea1cb17ced530.lhr.life';
 }
 
 class ApiClient {
@@ -48,14 +47,6 @@ class ApiClient {
         const url = `${this.baseURL}${endpoint}`;
         const telegramId = this._getTelegramId();
         
-        console.log('API Request:', {
-            url,
-            endpoint,
-            baseURL: this.baseURL,
-            telegramId,
-            method: options.method || 'GET'
-        });
-        
         const config = {
             ...options,
             headers: {
@@ -73,10 +64,7 @@ class ApiClient {
         }
 
         try {
-            console.log('Fetching:', url, config);
             const response = await fetch(url, config);
-            
-            console.log('Response status:', response.status, response.statusText);
             
             if (!response.ok) {
                 const errorText = await response.text();
@@ -86,7 +74,6 @@ class ApiClient {
                 } catch {
                     errorData = { detail: errorText || `HTTP ${response.status}` };
                 }
-                console.error('API Error:', errorData, 'Response text:', errorText);
                 throw new Error(errorData.detail || errorData.message || `API error: ${response.status}`);
             }
 
@@ -96,16 +83,12 @@ class ApiClient {
             }
 
             const data = await response.json();
-            console.log('API Success:', data);
             return data;
         } catch (error) {
-            console.error('API request failed:', error);
-            console.error('Error details:', {
-                message: error.message,
-                url,
-                baseURL: this.baseURL,
-                stack: error.stack
-            });
+            // Улучшаем сообщение об ошибке для пользователя
+            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.name === 'TypeError') {
+                throw new Error('Не удалось подключиться к серверу');
+            }
             throw error;
         }
     }

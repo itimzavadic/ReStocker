@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     """Настройки приложения"""
     
     # База данных
+    # Railway автоматически предоставляет DATABASE_URL через переменную окружения
     DATABASE_URL: str = "sqlite:///restocker.db"
     
     # Telegram Bot
@@ -16,7 +17,8 @@ class Settings(BaseSettings):
     TELEGRAM_SECRET_KEY: str = ""
     
     # CORS
-    CORS_ORIGINS: List[str] = ["https://web.telegram.org", "https://df094aa7b7b527.lhr.life", "https://fcc85d962b95bc.lhr.life", "http://localhost:3000"]
+    # Railway домен будет добавлен автоматически через переменную окружения RAILWAY_PUBLIC_DOMAIN
+    CORS_ORIGINS: List[str] = ["https://web.telegram.org", "http://localhost:3000"]
     
     # API
     API_V1_PREFIX: str = "/api/v1"
@@ -31,6 +33,25 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra='allow',
     )
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Автоматически добавляем Railway домен в CORS, если он доступен
+        import os
+        railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        if railway_domain:
+            # Добавляем Railway домен в CORS
+            if f"https://{railway_domain}" not in self.CORS_ORIGINS:
+                self.CORS_ORIGINS.append(f"https://{railway_domain}")
+        
+        # Используем DATABASE_URL из переменной окружения, если доступен (Railway предоставляет PostgreSQL)
+        db_url = os.getenv("DATABASE_URL")
+        if db_url:
+            # Railway предоставляет DATABASE_URL в формате postgresql://, но SQLAlchemy ожидает postgresql://
+            # Конвертируем если нужно
+            if db_url.startswith("postgres://"):
+                db_url = db_url.replace("postgres://", "postgresql://", 1)
+            self.DATABASE_URL = db_url
 
 
 settings = Settings()

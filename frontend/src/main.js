@@ -42,10 +42,13 @@ async function loadProducts() {
         }
     } catch (error) {
         console.error('Failed to load products:', error);
-        const errorMsg = `Не удалось загрузить товары: ${error.message || 'Неизвестная ошибка'}`;
-        showError(errorMsg);
-        // Отображаем ошибку на экране
-        showErrorOnScreen(errorMsg);
+        // Не показываем ошибку, если это просто пустой список (новый пользователь)
+        // Показываем только если это реальная ошибка подключения
+        if (error.message && !error.message.includes('Failed to fetch') && !error.message.includes('load failed')) {
+            const errorMsg = `Не удалось загрузить товары: ${error.message}`;
+            showError(errorMsg);
+            showErrorOnScreen(errorMsg);
+        }
         products = [];
     }
 }
@@ -54,25 +57,14 @@ async function loadProducts() {
 function render() {
     const app = document.getElementById('app');
     
-    // Добавляем отладочную информацию
-    const debugInfo = `
-        <div style="padding: 10px; background: #f0f0f0; font-size: 12px; margin-bottom: 10px;">
-            <strong>Отладка:</strong><br>
-            Hostname: ${window.location.hostname}<br>
-            API URL: ${apiClient.baseURL || '(relative)'}<br>
-            Telegram ID: ${apiClient.getTelegramId()}<br>
-            Telegram WebApp: ${window.Telegram?.WebApp ? 'Да' : 'Нет'}
-        </div>
-    `;
-    
     if (currentState === 'form' || currentState === 'edit') {
         const product = currentState === 'edit' && currentEditId 
             ? products.find(p => p.id === currentEditId) 
             : null;
-        app.innerHTML = debugInfo + renderProductForm(product);
+        app.innerHTML = renderProductForm(product);
         setupFormHandlers();
     } else {
-        app.innerHTML = debugInfo + renderProductList(products, addProduct, editProduct, deleteProduct);
+        app.innerHTML = renderProductList(products, addProduct, editProduct, deleteProduct);
     }
 }
 
@@ -129,6 +121,22 @@ function setupFormHandlers() {
         };
         
         try {
+            // Валидация данных перед отправкой
+            if (!productData.name || !productData.name.trim()) {
+                showError('Название товара обязательно для заполнения');
+                return;
+            }
+            
+            if (!productData.unit || !productData.unit.trim()) {
+                showError('Единица измерения обязательна для заполнения');
+                return;
+            }
+            
+            if (isNaN(productData.quantity)) {
+                showError('Текущий остаток должен быть числом');
+                return;
+            }
+            
             if (currentState === 'edit' && currentEditId) {
                 await apiClient.updateProduct(currentEditId, productData);
                 showSuccess('Товар обновлен');
@@ -143,7 +151,19 @@ function setupFormHandlers() {
             render();
         } catch (error) {
             console.error('Failed to save product:', error);
-            showError('Не удалось сохранить товар: ' + error.message);
+            
+            // Улучшенные сообщения об ошибках
+            let errorMessage = 'Не удалось сохранить товар';
+            
+            if (error.message.includes('already exists') || error.message.includes('уже существует')) {
+                errorMessage = 'Товар с таким названием уже существует';
+            } else if (error.message.includes('Failed to fetch') || error.message.includes('load failed')) {
+                errorMessage = 'Не удалось подключиться к серверу. Проверьте, что backend туннель запущен';
+            } else if (error.message) {
+                errorMessage = `Не удалось сохранить товар: ${error.message}`;
+            }
+            
+            showError(errorMessage);
         }
     });
 }
@@ -159,12 +179,15 @@ function showError(message) {
 
 function showErrorOnScreen(message) {
     const app = document.getElementById('app');
-    if (app && !document.getElementById('error-message')) {
-        const errorDiv = document.createElement('div');
-        errorDiv.id = 'error-message';
+    if (app) {
+        let errorDiv = document.getElementById('error-message');
+        if (!errorDiv) {
+            errorDiv = document.createElement('div');
+            errorDiv.id = 'error-message';
+            app.insertBefore(errorDiv, app.firstChild);
+        }
         errorDiv.style.cssText = 'padding: 15px; background: #ffebee; color: #c62828; border-radius: 8px; margin: 10px;';
         errorDiv.innerHTML = `<strong>Ошибка:</strong> ${message}`;
-        app.insertBefore(errorDiv, app.firstChild);
     }
 }
 
